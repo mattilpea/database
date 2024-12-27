@@ -1,0 +1,871 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local msg = game:GetService('MessagingService')
+local databaseModule = require(script.Parent.databaseModule)
+
+-- Subscribe to the "ArrestPlayer" channel
+msg:SubscribeAsync("ArrestPlayer", function(unformattedString)
+	print("received messaging arrestWarrant")
+	-- Call the formatter to get the data in a structured format
+	local formattedData = databaseModule.formatter(unformattedString.Data, true)  -- Assuming 'true' means accepted
+	
+	if Players:FindFirstChild(formattedData.warrantPlayer) then
+		local plrNameFound = formattedData.warrantPlayer
+		local plrFound = Players:FindFirstChild(plrNameFound)
+		local char = plrFound.Character
+		local charHead = char:FindFirstChild("Head")
+		
+		local rankGUI = charHead:FindFirstChild("Rank")
+		rankGUI.Frame.Name1.TextColor3 = Color3.new(1,0,0)
+		plrFound.marked.Value = true
+		print("MARKED RED")
+		
+		
+		
+	end
+	
+	
+	-- Check the formatted data structure
+	if formattedData then
+		print("Arrest player now: " .. formattedData.warrantPlayer)
+		print("Details:", formattedData)
+	else
+		warn("Formatter failed to process the message.")
+	end
+end)
+
+local serverFunctions = require(ReplicatedStorage.ModuleScripts.ServerFunctions)
+
+msg:SubscribeAsync("SearchPlot", function(unformattedString)
+	local formattedData = databaseModule.formatter(unformattedString.Data, true)
+	if Players:FindFirstChild(formattedData.warrantPlayer) then
+		local plrNameFound = formattedData.warrantPlayer
+		serverFunctions.plotBlipSet(plrNameFound)
+	end
+end)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local DS = game:GetService('DataStoreService')
+
+local pendingRequests = DS:GetDataStore("PendingRequests")
+local databaseModule = require(script.Parent.databaseModule)
+
+
+ReplicatedStorage.RemoteEvents.DatabaseEvents.ArrestedNotifier.OnServerEvent:Connect(function()
+	local success, data = pcall(function()
+		return pendingRequests:GetAsync("ArrestWarrants")
+	end)
+	if success and data then
+		for _, unformattedString in ipairs(data) do
+			local warrantedPlayerId, issuerId, categoryValue = string.match(unformattedString, "(%d+)_(%d+)_(%d+)")
+			local plrFound = Players:GetNameFromUserIdAsync(warrantedPlayerId)
+			if Players:FindFirstChild(plrFound) then
+				local ourPlr = Players:FindFirstChild(plrFound)
+				ourPlr.marked.Value = false
+			end
+			
+		end
+	end
+end)
+
+
+local serverFunctions = require(ReplicatedStorage.ModuleScripts.ServerFunctions)
+
+Players.PlayerAdded:Connect(function(plr)
+	local marked = script.marked:Clone()
+	marked.Value = false
+	marked.Parent = plr
+	
+	local search = script.search:Clone()
+	search.Value = false
+	search.Parent = plr
+		
+	
+	
+	plr.CharacterAdded:Connect(function(char)
+		----------------------------------------------------------------------------------
+		if search.Value == false then
+			local success, data = pcall(function()
+				return pendingRequests:GetAsync("SearchWarrants")
+			end)
+
+			if success and data then
+				for _, unformattedString in ipairs(data) do
+					local warrantedPlayerId, issuerId, categoryValue = string.match(unformattedString, "(%d+)_(%d+)_(%d+)")
+					local plrName = Players:GetNameFromUserIdAsync(tonumber(warrantedPlayerId))
+
+					if plr.Name == plrName then
+						search.Value = true
+						serverFunctions.plotBlipSet(plrName)
+					end
+				end 
+			else
+
+			end
+
+		elseif search.Value == true then
+			
+		end	
+		plr.Character.Humanoid.Died:Connect(function()
+			task.wait(1)
+			plr.Character:Destroy()
+		end)
+		-----------------------------------------------------------------------------------
+		marked:GetPropertyChangedSignal("Value"):Connect(function()
+			if marked.Value == false then
+				ReplicatedStorage.RemoteEvents.DatabaseEvents.TrackPlayerBlip:FireAllClients(marked.Parent.Name, false)
+			elseif marked.Value == true then
+				ReplicatedStorage.RemoteEvents.DatabaseEvents.TrackPlayerBlip:FireAllClients(marked.Parent.Name, true)
+			end
+		end)
+		if marked.Value == false then
+			ReplicatedStorage.RemoteEvents.DatabaseEvents.TrackPlayerBlip:FireAllClients(marked.Parent.Name, false)
+		elseif marked.Value == true then
+			ReplicatedStorage.RemoteEvents.DatabaseEvents.TrackPlayerBlip:FireAllClients(marked.Parent.Name, true)
+		end
+		local rankClone = script.Rank:Clone()
+		rankClone.Parent = char.Head
+		rankClone.Frame.Name1.Text = plr.Name
+		rankClone.Frame.Rank.Text = plr:GetRoleInGroup(9388873)
+		 if marked.Value == false then
+		 local success, data = pcall(function()
+		 return pendingRequests:GetAsync("ArrestWarrants")
+		end)
+		
+		if success and data then
+			for _, unformattedString in ipairs(data) do
+					local warrantedPlayerId, issuerId, categoryValue = string.match(unformattedString, "(%d+)_(%d+)_(%d+)")
+					local plrName = Players:GetNameFromUserIdAsync(tonumber(warrantedPlayerId))
+					
+					if plr.Name == plrName then
+						marked.Value = true
+						rankClone.Frame.Name1.TextColor3 = Color3.new(1, 0, 0)
+					end
+			end 
+		else
+			
+		end
+		
+		 elseif marked.Value == true then
+			rankClone.Frame.Name1.TextColor3 = Color3.new(1, 0, 0)
+		 end	
+		 plr.Character.Humanoid.Died:Connect(function()
+				task.wait(1)
+				plr.Character:Destroy()
+		 end)
+	end)
+end)
+
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+
+local rallyPointSaver = ServerStorage.RallyPointSaver
+
+ReplicatedStorage.RemoteEvents.DatabaseEvents.setCoordinateBlip.OnServerEvent:Connect(function(plr, x , z)
+	if plr:IsInGroup(17150285) or plr.UserId == 395083046 then
+		local plrList = Players:GetPlayers()
+		for _, pear in plrList do
+			if pear:IsInGroup(17150285) or pear.UserId == 395083046 then
+				ReplicatedStorage.RemoteEvents.DatabaseEvents.setCoordinateBlip:FireClient(pear, x, z)
+			end
+		end
+		
+		local newPosition = Instance.new("Vector3Value")
+		newPosition.Value = Vector3.new(x,0,z)
+		newPosition.Parent = rallyPointSaver
+		
+		
+		
+		
+	end
+end)
+
+Players.PlayerAdded:Connect(function(plr)
+	if plr:IsInGroup(17150285) or plr.UserId == 395083046 then
+		
+		for _, vect in pairs(rallyPointSaver:GetChildren()) do
+			local x = vect.Value.X
+			local z = vect.Value.Z
+			
+			ReplicatedStorage.RemoteEvents.DatabaseEvents.setCoordinateBlip:FireClient(plr, x, z)
+		end
+		
+	end
+end)
+
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local MessagingService = game:GetService('MessagingService')
+
+
+local datastoreService = game:GetService("DataStoreService")
+local pendingRequests = datastoreService:GetDataStore("PendingRequests")
+
+local serverContainer = ServerStorage.ServerContainer
+local plotManager = require(serverContainer.CoreModule.Game.GameModules.PlotManager)
+
+
+local allPendingPlayers = {} -- Table to store the combined player data as {<plrId>_<requestedBy>_categoryValue}
+local searchWarrantPlayers = {}
+local arrestWarrantPlayers = {}
+
+
+local proxyEndPoint = "http://104.248.59.56:5000/webhook"
+
+
+
+local function formatter(unformattedString, condition )
+	local warrantedPlayerId, issuerId, categoryValue = string.match(unformattedString, "(%d+)_(%d+)_(%d+)")
+	local category
+	if tonumber(categoryValue) == 0 then
+		category = "Search Warrant"
+	elseif tonumber(categoryValue) == 1 then
+		category = "Arrest Warrant"
+	end
+	local status
+	if condition == true then
+	status = "accepted"
+	elseif condition == false then
+		status = "declined"
+	else
+		status = "undefined"
+	end
+	local data = {
+		requestedBy = Players:GetNameFromUserIdAsync(tonumber(issuerId)),
+		playerToBeAdded = Players:GetNameFromUserIdAsync(tonumber(warrantedPlayerId)),
+		category = category,
+		status = status
+	}
+	return data
+end
+
+
+
+ReplicatedStorage.RemoteEvents.DatabaseEvents.PlayerListRequest.OnServerEvent:Connect(function(plrWhoNeeded)
+	print("Reveicefd confirmation for playerList")
+	local success, data = pcall(function()
+		print("player lsit incoming")
+		return pendingRequests:GetAsync("PlayerList")
+		
+	end)
+	
+	if success and data then
+		ReplicatedStorage.RemoteEvents.DatabaseEvents.PlayerListRequest:FireClient(plrWhoNeeded, data )
+		print("should be there")
+	else
+		task.wait(5)
+		ReplicatedStorage.RemoteEvents.DatabaseEvents.PlayerListRequest:FireClient(plrWhoNeeded, data )
+	end
+end)
+
+
+
+ReplicatedStorage.RemoteEvents.DatabaseEvents.SearchListRequest.OnServerEvent:Connect(function(plrWhoNeeded)
+	local success, data = pcall(function()
+		return pendingRequests:GetAsync("SearchWarrants")
+	end)
+
+	if success and data then
+		ReplicatedStorage.RemoteEvents.DatabaseEvents.SearchListRequest:FireClient(plrWhoNeeded, data )
+
+	else
+		task.wait(5)
+		ReplicatedStorage.RemoteEvents.DatabaseEvents.SearchListRequest:FireClient(plrWhoNeeded, data )
+	end
+end)
+
+ReplicatedStorage.RemoteEvents.DatabaseEvents.ArrestListRequest.OnServerEvent:Connect(function(plrWhoNeeded)
+	local success, data = pcall(function()
+		return pendingRequests:GetAsync("ArrestWarrants")
+	end)
+
+	if success and data then
+		ReplicatedStorage.RemoteEvents.DatabaseEvents.ArrestListRequest:FireClient(plrWhoNeeded, data )
+
+	else
+		task.wait(5)
+		ReplicatedStorage.RemoteEvents.DatabaseEvents.ArrestListRequest:FireClient(plrWhoNeeded, data )
+	end
+end)
+
+
+-- Load the player list from the DataStore
+local function setPlayerList()
+	local success, data = pcall(function()
+		return pendingRequests:GetAsync("PlayerList")
+	end)
+
+	if success and data then
+		allPendingPlayers = data
+		print("Loaded player list:", allPendingPlayers)
+	else
+		if script:FindFirstChild("Tries") then
+			if script.Tries.Value < 5 then
+				script.Tries.Value += 1
+				setPlayerList() -- Retry loading the list
+			else
+				warn("Failed to get pending player list after 5 tries.")
+			end
+		else
+			local intVal = Instance.new("IntValue")
+			intVal.Parent = script
+			intVal.Value = 0
+			intVal.Name = "Tries"
+		end
+	end
+end
+
+
+ReplicatedStorage.RemoteEvents.DatabaseEvents.requestIdentifier.OnServerEvent:Connect(function(plrWhoSent, condition , unformattedString)
+	if plrWhoSent then
+		if condition == false then
+			local ourData = formatter(unformattedString, false)
+			local ourJSON = HttpService:JSONEncode(ourData)
+			local savedIndex
+			for index, playerKey in ipairs(allPendingPlayers) do
+				if playerKey == unformattedString then
+					savedIndex = index
+				end
+			end
+			table.remove(allPendingPlayers, savedIndex)
+			local success, err = pcall(function()
+				pendingRequests:SetAsync("PlayerList", allPendingPlayers)
+			end)
+
+			if success then
+				print("removed Index along with warrant Datastore Key")
+				ReplicatedStorage.RemoteEvents.DatabaseEvents.requestIdentifier:FireClient(plrWhoSent, unformattedString)
+				HttpService:PostAsync(proxyEndPoint, ourJSON, Enum.HttpContentType.ApplicationJson ) 
+			else
+				warn("Failed to save updated player list:", err)
+				pendingRequests:SetAsync("PlayerList", allPendingPlayers)
+			end
+		elseif condition == true  then
+			local warrantedPlayerId, issuerId, categoryValue = string.match(unformattedString, "(%d+)_(%d+)_(%d+)")
+			local ourData = formatter(unformattedString, true)
+			local ourJSON = HttpService:JSONEncode(ourData)
+			local category 
+			if tonumber(categoryValue) == 0 then
+				category = "Search Warrant"
+			elseif tonumber(categoryValue) == 1 then
+				category = "Arrest Warrant"
+			end
+			
+			if tonumber(categoryValue) == 0 then
+				local success, data = pcall(function()
+					return pendingRequests:GetAsync("SearchWarrants")
+				end)
+				if success and data then
+					searchWarrantPlayers = data
+					print("Loaded search warrant list:", searchWarrantPlayers)
+				else
+					warn("Failed to get search warrant list.")
+				end
+				table.insert(searchWarrantPlayers, unformattedString)
+				--here to add event for plotcheck
+				MessagingService:PublishAsync("SearchPlot", unformattedString)
+				local success, err = pcall(function()
+					pendingRequests:SetAsync("SearchWarrants", searchWarrantPlayers)
+				end)
+
+				if success then
+					print("succesfully updated SearchWarrantPlayers Datastore")
+					local savedIndex
+					for index, playerKey in ipairs(allPendingPlayers) do
+						if playerKey == unformattedString then
+							savedIndex = index
+						end
+					end
+					table.remove(allPendingPlayers, savedIndex)
+					local success, err = pcall(function()
+						pendingRequests:SetAsync("PlayerList", allPendingPlayers)
+					end)
+
+					if success then
+						print("removed Index along with warrant Datastore Key")
+						ReplicatedStorage.RemoteEvents.DatabaseEvents.requestIdentifier:FireClient(plrWhoSent, unformattedString)
+						HttpService:PostAsync(proxyEndPoint, ourJSON, Enum.HttpContentType.ApplicationJson ) 
+					else
+						warn("Failed to save updated player list:", err)
+						pendingRequests:SetAsync("PlayerList", allPendingPlayers)
+					end
+					
+					
+					
+					
+					HttpService:PostAsync(proxyEndPoint, ourJSON, Enum.HttpContentType.ApplicationJson ) 
+				else
+					print("ERROR/ NOT SUCCESS SearchWarrantPlayers Datastore")
+				end
+			elseif tonumber(categoryValue) == 1 then
+				local success, data = pcall(function()
+					return pendingRequests:GetAsync("ArrestWarrants")
+				end)
+				if success and data then
+					arrestWarrantPlayers = data
+					print("Loaded search warrant list:", arrestWarrantPlayers)
+				else
+					warn("Failed to get search warrant list.")
+					local success, data = pcall(function()
+						return pendingRequests:GetAsync("ArrestWarrants")
+					end)
+					if success and data then
+						arrestWarrantPlayers = data
+						print("Loaded search warrant list:", arrestWarrantPlayers)
+					else
+						warn("Failed to get search warrant list.")
+					end
+				end
+				
+				table.insert(arrestWarrantPlayers, unformattedString)
+				local success, err = pcall(function()
+					pendingRequests:SetAsync("ArrestWarrants", arrestWarrantPlayers)
+				end)
+				
+				if success then
+					print("succesfully updated ArrestWarrantPlayers Datastore")
+					
+					MessagingService:PublishAsync("ArrestPlayer", unformattedString )	
+					print("sent messaging service")
+					local savedIndex
+					for index, playerKey in ipairs(allPendingPlayers) do
+						if playerKey == unformattedString then
+							savedIndex = index
+						end
+					end
+					table.remove(allPendingPlayers, savedIndex)
+					local success, err = pcall(function()
+						pendingRequests:SetAsync("PlayerList", allPendingPlayers)
+						print(allPendingPlayers, "THIS IS THE ONE THAT IS GOING TO REMOVE THE INDEX AFTER ARREST ACCEPTED")
+					end)
+
+					if success then
+						print("removed Index along with warrant Datastore Key")
+						ReplicatedStorage.RemoteEvents.DatabaseEvents.requestIdentifier:FireClient(plrWhoSent, unformattedString)
+						HttpService:PostAsync(proxyEndPoint, ourJSON, Enum.HttpContentType.ApplicationJson ) 
+					else
+						warn("Failed to save updated player list:", err)
+						pendingRequests:SetAsync("PlayerList", allPendingPlayers)
+					end
+					
+					
+					
+					
+					HttpService:PostAsync(proxyEndPoint, ourJSON, Enum.HttpContentType.ApplicationJson )
+				else
+					print("ERROR/ NOT SUCCESS ArrestWarrantPlayers Datastore")
+				end
+				
+				
+			end
+			
+			ReplicatedStorage.RemoteEvents.DatabaseEvents.requestIdentifier:FireClient(plrWhoSent, unformattedString)
+			
+		end
+	end
+end)
+
+
+-- Add a player's UserId and the player who requested it in the "plrId_requestedBy" format
+local function addPlayerToList(plrId, ThePlayerWhoRequestedID, categoryValue)
+	-- Create a key using the format plrId_requestedBy
+	local playerKey = tostring(plrId) .. "_" .. ThePlayerWhoRequestedID .."_"..tostring(categoryValue)
+
+	-- Add the key to the list (allow duplicates)
+	table.insert(allPendingPlayers, playerKey)
+	print("Added Player Key:", playerKey)
+
+	-- Save the updated list to the DataStore
+	local success, err = pcall(function()
+		pendingRequests:SetAsync("PlayerList", allPendingPlayers)
+	end)
+
+	if success then
+		print("Successfully saved updated player list.")
+	else
+		warn("Failed to save updated player list:", err)
+		pendingRequests:SetAsync("PlayerList", allPendingPlayers)
+	end
+end
+
+
+
+
+
+
+--- CATEGORY VALUE == 0 == SEARCH WARRANT
+--- CATEGORY VALUE == 1 == ARREST WARRANT
+
+ReplicatedStorage.RemoteEvents.DatabaseEvents.sendUsernameAndReason.OnServerEvent:Connect(function(plrWhoRequested, plrToBeAdded, reason, categoryValue)
+	addPlayerToList(plrToBeAdded, plrWhoRequested.UserId, categoryValue)
+	
+	local category 
+	if categoryValue == 0 then
+		category = "Search Warrant"
+	elseif categoryValue == 1 then
+		category = "Arrest Warrant"
+	end
+	
+	local data = {
+		requestedBy = plrWhoRequested.Name,
+		playerToBeAdded = Players:GetNameFromUserIdAsync(plrToBeAdded),
+		reason = reason,
+		category = category
+	}
+	local jsonData = HttpService:JSONEncode(data)
+	
+	local success, response = pcall(function()
+		return HttpService:PostAsync(proxyEndPoint, jsonData, Enum.HttpContentType.ApplicationJson)
+	end)
+	if success then
+		print("Successfully sent data to the proxy:", response)
+	else
+		warn("Failed to send data to the proxy:", response)
+	end
+end)
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local serverFunctions = require(ReplicatedStorage.ModuleScripts.ServerFunctions)
+
+ReplicatedStorage.RemoteEvents.DatabaseEvents.arrestPlayerOrNot.OnServerEvent:Connect(function(plrArresting, plrThatsgonnaGetArrested)
+	serverFunctions.arrestPlayer(plrArresting, Players:FindFirstChild(plrThatsgonnaGetArrested))
+end)
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local serverFunctions = require(ReplicatedStorage.ModuleScripts.ServerFunctions)
+
+ReplicatedStorage.RemoteEvents.DatabaseEvents.searchWarrantRemover.OnServerEvent:Connect(function(plr, unformattedString)
+	--add search for multiple players/ permissions
+	
+	serverFunctions.searchRemover(unformattedString)
+end)
+
+
+
+local databaseModule = {}
+
+
+local function formatter(unformattedString, condition )
+	local Players = game:GetService("Players")
+	local warrantedPlayerId, issuerId, categoryValue = string.match(unformattedString, "(%d+)_(%d+)_(%d+)")
+	local category
+	if tonumber(categoryValue) == 0 then
+		category = "Search Warrant"
+	elseif tonumber(categoryValue) == 1 then
+		category = "Arrest Warrant"
+	end
+	local status
+	if condition == true then
+		status = "accepted"
+	elseif condition == false then
+		status = "declined"
+	else
+		status = "undefined"
+	end
+	local data = {
+		requestedBy = Players:GetNameFromUserIdAsync(tonumber(issuerId)),
+		warrantPlayer = Players:GetNameFromUserIdAsync(tonumber(warrantedPlayerId)),
+		category = category,
+		status = status
+	}
+	return data
+end
+
+databaseModule.formatter = formatter
+
+
+
+return databaseModule
+
+
+game.ReplicatedStorage.RemoteEvent.OnServerEvent:Connect(function(player, msg, rec, send)	
+	local filter = game:GetService("Chat"):FilterStringForBroadcast(msg, player)
+	game.ReplicatedStorage.RemoteEvent:FireAllClients(filter, rec, send)
+end)
+
+
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Teams = game:GetService("Teams")
+
+local kidnapProximity = script.Part.kidnap
+local zipTieTool = script.zipTieTool
+
+Players.PlayerAdded:Connect(function(plr)
+	print("Player added:", plr.Name)
+end)
+
+ReplicatedStorage.RemoteEvents.TeamChange.OnServerEvent:Connect(function(plr, teamName)
+	print("TeamChange event received for player:", plr.Name, "New team:", teamName)
+
+	local Selected_Team = Teams:FindFirstChild(teamName)
+	plr.Team = Selected_Team
+	local char = plr.Character
+	local hrp = char:FindFirstChild('HumanoidRootPart')
+
+	if plr.Team == Teams.Civilian then
+		print("Player is now a Civilian:", plr.Name)
+		ReplicatedStorage.RemoteEvents.FunctionPasserfromDataModel:FireClient(plr, false)
+
+		if not hrp:FindFirstChild(kidnapProximity.Name) then
+			local kidnapClone = kidnapProximity:Clone()
+			kidnapClone.Parent = hrp
+			print("Cloned kidnap proximity for Civilian:", plr.Name)
+		end
+
+		if plr.Backpack:FindFirstChild(script.zipTieTool.Name) then
+			plr.Backpack:FindFirstChild(script.zipTieTool.Name):Destroy()
+			print("Removed zipTieTool from Civilian's Backpack:", plr.Name)
+		end
+
+		if plr.Character:FindFirstChild(script.zipTieTool.Name) then
+			plr.Character:FindFirstChild(script.zipTieTool.Name):Destroy()
+			print("Removed zipTieTool from Civilian's Character:", plr.Name)
+		end
+
+	elseif plr.Team == Teams.KVA then
+		print("Player is now KVA:", plr.Name)
+
+		if hrp:FindFirstChildWhichIsA('ProximityPrompt') then
+			local ourProx = hrp:FindFirstChild(kidnapProximity.Name)
+			if ourProx then
+				ourProx:Destroy()
+				print("Removed kidnap proximity from KVA:", plr.Name)
+			end
+		end
+		if plr.Backpack:FindFirstChild("zipTieTool") then
+		else
+			local zC = zipTieTool:Clone()
+			zC.Parent = plr.Backpack
+			print("Added zipTieTool to KVA's Backpack:", plr.Name)
+		end
+	else
+		print("Unhandled team detected for:", plr.Name)
+	end
+end)
+
+ReplicatedStorage.BindableEvents.TeamEvent.Event:Connect(function(plrName, teamName)
+	print("Reached TeamEvent for:", plrName, "New team:", teamName)
+
+	local plr = Players:FindFirstChild(plrName)
+	local Selected_Team = Teams:FindFirstChild(teamName)
+	plr.Team = Selected_Team
+	local char = plr.Character
+	local hrp = char:FindFirstChild('HumanoidRootPart')
+
+	if plr.Team == Teams.Civilian then
+		print("TeamEvent: Player is now a Civilian:", plr.Name)
+		ReplicatedStorage.RemoteEvents.FunctionPasserfromDataModel:FireClient(plr, false)
+
+		if not hrp:FindFirstChild(kidnapProximity.Name) then
+			local kidnapClone = kidnapProximity:Clone()
+			kidnapClone.Parent = hrp
+			print("Duplicated proximity prompt for Civilian:", plr.Name)
+		end
+
+		if plr.Backpack:FindFirstChild(script.zipTieTool.Name) then
+			plr.Backpack:FindFirstChild(script.zipTieTool.Name):Destroy()
+			print("Removed zipTieTool from Civilian's Backpack:", plr.Name)
+		end
+
+		if plr.Character:FindFirstChild(script.zipTieTool.Name) then
+			plr.Character:FindFirstChild(script.zipTieTool.Name):Destroy()
+			print("Removed zipTieTool from Civilian's Character:", plr.Name)
+		end
+
+		char:MoveTo(workspace.SpawnLocation.Position)
+		print("Moved Civilian to spawn location:", plr.Name)
+
+	elseif plr.Team == Teams.KVA then
+		print("TeamEvent: Player is now KVA:", plr.Name)
+
+		if hrp:FindFirstChildWhichIsA('ProximityPrompt') then
+			local ourProx = hrp:FindFirstChild(kidnapProximity.Name)
+			if ourProx then
+				ourProx:Destroy()
+				print("Removed proximity prompt for KVA:", plr.Name)
+			end
+		end
+if plr.Backpack:FindFirstChild("zipTieTool") then
+else
+			local zC = zipTieTool:Clone()
+			zC.Parent = plr.Backpack
+			print("Added zipTieTool to KVA's Backpack:", plr.Name)
+end
+		
+
+		char:MoveTo(workspace.SpawnLocation.Position)
+		print("Moved KVA to spawn location:", plr.Name)
+	else
+		print("Unhandled team detected for TeamEvent:", plr.Name)
+	end
+end)
+
+
+
+--//Objects
+local warrantFormatFrame = script:WaitForChild("Format") -- Template for displaying warrants
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+task.wait(2)
+
+local rebounce = false
+
+local PlayerList = {}
+ReplicatedStorage.RemoteEvents.DatabaseEvents.ArrestListRequest.OnClientEvent:Connect(function(PlayerListFromServer)
+	rebounce = false
+	PlayerList = PlayerListFromServer
+	rebounce = true
+end)
+
+
+local thumbType = Enum.ThumbnailType.HeadShot
+local thumbSize = Enum.ThumbnailSize.Size420x420
+
+script.Parent.Parent.RefreshButton.Activated:Connect(function()
+	ReplicatedStorage.RemoteEvents.DatabaseEvents.ArrestListRequest:FireServer()
+
+	for _, frame in pairs(script.Parent:GetChildren()) do
+		if frame:IsA('Frame') then
+			frame:Destroy()
+		end
+	end
+	print(PlayerList)
+	task.wait()
+	if rebounce == false then
+		
+		return
+	elseif rebounce == true then
+		rebounce = false
+	
+		for index, warrantString in ipairs(PlayerList) do
+			-- Separate the UserId of the warranted player and the issuer
+			local warrantedPlayerId, issuerId, categoryValue = string.match(warrantString, "(%d+)_(%d+)_(%d+)")
+
+			local category 
+			if tonumber(categoryValue) == 0 then
+				category = "Search Warrant"
+			elseif tonumber(categoryValue) == 1 then
+				category = "Arrest Warrant"
+			end
+
+
+			if warrantedPlayerId and issuerId and category then
+				print(index, ", ".."WarrantedPlayerID:", warrantedPlayerId, "| IssuerID:", issuerId,"| Category:", category)
+
+			end
+			local formatClone = warrantFormatFrame:Clone()
+			formatClone.Name = warrantString
+			local warrantPlayerName = Players:GetNameFromUserIdAsync(tonumber(warrantedPlayerId))
+			local issuerName = Players:GetNameFromUserIdAsync(tonumber(issuerId))
+			local pfpForWarrantPlayer, isReady = Players:GetUserThumbnailAsync(tonumber(warrantedPlayerId), thumbType, thumbSize)
+			local pfpForIssuer, isReady = Players:GetUserThumbnailAsync(tonumber(issuerId), thumbType, thumbSize)
+			formatClone.WarrantPlayerName.Text = warrantPlayerName
+			formatClone.memberWhoIssuedName.Text = issuerName
+			formatClone.WarrantPlayer.Image = pfpForWarrantPlayer
+			formatClone.memberWhoRequested.Image = pfpForIssuer
+			formatClone.CategoryText.Text = category
+			formatClone.categoryValue.Value = tonumber(categoryValue)
+			formatClone.WarrantPlayerUserID.Value = tonumber(warrantedPlayerId)
+			formatClone.IssuerUserID.Value = tonumber(issuerId)
+			formatClone.unformattedString.Value = warrantString
+			formatClone.Parent = script.Parent
+		end
+	end
+end)
+
+--this script shows all current warrants by looking into datastores 
+-- global datastores --> PendingRequests --->> look into scopes ---> PlayerList 
+---PlayerList contains list of strings starting from [  1)  ]
+--- the strings are formmated like this >> UserIdofPlayerWhoisWarranted_UserIdOfPlayerWhoIssuedTheWarrant_CategoryValue
+--> examples would be 1) 426374_47263742_1
+--this script will only do a read only on those strings, and separate the underscore and divide the playerids to actual ids
+---then finally display them
+---a csoc or higher grade member can take action depending on various factors (later to be discussed)
+--lets begin.
+
+
+
+--//Objects
+local warrantFormatFrame = script:WaitForChild("Format") -- Template for displaying warrants
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local rebounce = false
+
+local PlayerList = {}
+ReplicatedStorage.RemoteEvents.DatabaseEvents.PlayerListRequest.OnClientEvent:Connect(function(PlayerListFromServer)
+	if rebounce == false then
+	PlayerList = PlayerListFromServer
+	rebounce = true
+	end
+end)
+
+
+local thumbType = Enum.ThumbnailType.HeadShot
+local thumbSize = Enum.ThumbnailSize.Size420x420
+
+script.Parent.Parent.RefreshButton.Activated:Connect(function()
+	ReplicatedStorage.RemoteEvents.DatabaseEvents.PlayerListRequest:FireServer()
+
+	for _, frame in pairs(script.Parent:GetChildren()) do
+		if frame:IsA('Frame') then
+			frame:Destroy()
+		end
+	end
+if rebounce == true then
+rebounce = false
+task.wait(2)
+	print(PlayerList)
+	
+	for index, warrantString in pairs(PlayerList) do
+		-- Separate the UserId of the warranted player and the issuer
+		local warrantedPlayerId, issuerId, categoryValue = string.match(warrantString, "(%d+)_(%d+)_(%d+)")
+
+		local category 
+		if tonumber(categoryValue) == 0 then
+			category = "Search Warrant"
+		elseif tonumber(categoryValue) == 1 then
+			category = "Arrest Warrant"
+		end
+
+
+		if warrantedPlayerId and issuerId and category then
+			print(index, ", ".."WarrantedPlayerID:", warrantedPlayerId, "| IssuerID:", issuerId,"| Category:", category)
+
+		end
+		local formatClone = warrantFormatFrame:Clone()
+		formatClone.Name = warrantString
+		local warrantPlayerName = Players:GetNameFromUserIdAsync(tonumber(warrantedPlayerId))
+		local issuerName = Players:GetNameFromUserIdAsync(tonumber(issuerId))
+		local pfpForWarrantPlayer, isReady = Players:GetUserThumbnailAsync(tonumber(warrantedPlayerId), thumbType, thumbSize)
+		local pfpForIssuer, isReady = Players:GetUserThumbnailAsync(tonumber(issuerId), thumbType, thumbSize)
+		formatClone.WarrantPlayerName.Text = warrantPlayerName
+		formatClone.memberWhoRequestedName.Text = issuerName
+		formatClone.WarrantPlayer.Image = pfpForWarrantPlayer
+		formatClone.memberWhoRequested.Image = pfpForIssuer
+		formatClone.CategoryText.Text = category
+		formatClone.categoryValue.Value = tonumber(categoryValue)
+		formatClone.WarrantPlayerUserID.Value = tonumber(warrantedPlayerId)
+		formatClone.IssuerUserID.Value = tonumber(issuerId)
+		formatClone.unformattedString.Value = warrantString
+		formatClone.Parent = script.Parent
+	end
+	elseif rebounce == false then
+		return
+
+	end
+end)
+
+
+
